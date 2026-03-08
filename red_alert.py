@@ -226,6 +226,8 @@ class Config:
         "minimized":False,"google_user":None,"google_cookies":None,
         "fullscreen_timeout":15,
         "overlay_timeout":30,
+        "friend_sound_type":"soft",   # same / silent / soft / standard / urgent / siren / friend
+        "friend_alert_banner":True,   # הצג באנר כתום כשחבר באזור התרעה
     }
     def __init__(self): self.data=dict(self.DEF); self._load()
     def _load(self):
@@ -350,10 +352,23 @@ class SoundPlayer:
     def __init__(self): self._busy=False; self._type="standard"
     def set_type(self,t):
         if t in SOUND_PROFILES: self._type=t
-    def play(self,friend_in_area=False):
+    def play(self,friend_in_area=False,friend_sound_type="friend"):
         if self._busy: return
+        if friend_in_area:
+            fst = friend_sound_type or "friend"
+            if fst == "silent":
+                return                                      # שקט לחלוטין
+            elif fst == "same":
+                beeps = SOUND_PROFILES[self._type]["beeps"]  # כמו ההתרעה הרגילה
+            elif fst == "friend":
+                beeps = FRIEND_SOUND_BEEPS                   # צפצוף ייחודי לחברים
+            elif fst in SOUND_PROFILES:
+                beeps = SOUND_PROFILES[fst]["beeps"]         # פרופיל שנבחר
+            else:
+                beeps = SOUND_PROFILES["soft"]["beeps"]      # fallback — עדין
+        else:
+            beeps = SOUND_PROFILES[self._type]["beeps"]
         self._busy=True
-        beeps=FRIEND_SOUND_BEEPS if friend_in_area else SOUND_PROFILES[self._type]["beeps"]
         threading.Thread(target=self._run,args=(beeps,),daemon=True).start()
     def preview(self,stype):
         beeps=FRIEND_SOUND_BEEPS if stype=="friend" else SOUND_PROFILES.get(stype,SOUND_PROFILES["standard"])["beeps"]
@@ -695,7 +710,7 @@ class MapWindow(QWidget):
 class FloatingWidget(QWidget):
     sig_fullscreen=pyqtSignal(); sig_settings=pyqtSignal(); sig_map=pyqtSignal()
     sig_google=pyqtSignal()   # ← פותח גוגל מפות שיתוף מיקום
-    MIN_W,MIN_H=235,85
+    MIN_W,MIN_H=235,130
     def __init__(self,config):
         super().__init__(); self.config=config
         self._alerts=deque(maxlen=60); self._active=None
@@ -705,11 +720,13 @@ class FloatingWidget(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setMinimumSize(self.MIN_W,self.MIN_H)
-        w=max(self.MIN_W,config.get("widget_w",262)); h=max(self.MIN_H,config.get("widget_h",130))
+        # תמיד מינימום MIN_H — גם אם config שמר ערך קטן יותר
+        saved_h = config.get("widget_h", 155)
+        w=max(self.MIN_W,config.get("widget_w",262)); h=max(self.MIN_H, saved_h)
         self.resize(w,h); self._build(); self._position()
         self._timer=QTimer(self); self._timer.timeout.connect(self._tick); self._timer.start(450)
     def _build(self):
-        root=QVBoxLayout(self); root.setContentsMargins(8,8,8,14); root.setSpacing(4)
+        root=QVBoxLayout(self); root.setContentsMargins(8,8,8,6); root.setSpacing(4)
         hdr=QWidget(); hdr.setFixedHeight(30)
         hl=QHBoxLayout(hdr); hl.setContentsMargins(4,0,4,0); hl.setSpacing(4)
         def sb(t,tip):
@@ -742,11 +759,16 @@ class FloatingWidget(QWidget):
         self._il=QVBoxLayout(self._iw); self._il.setContentsMargins(0,0,0,0)
         self._il.setSpacing(3); self._il.setAlignment(Qt.AlignTop); self._scroll.setWidget(self._iw)
         self._lconn=QLabel(""); self._lconn.setAlignment(Qt.AlignCenter)
-        self._lconn.setFont(QFont("Arial",7)); self._lconn.setFixedHeight(14)
+        self._lconn.setFont(QFont("Arial",7)); self._lconn.setFixedHeight(13)
         self._lconn.setStyleSheet("color:rgba(255,220,0,0.75);")
+        # ── קרדיט ────────────────────────────────────────────────
+        self._lcredit=QLabel("נבנה על ידי הראלי דודאי  |  מרץ 2026")
+        self._lcredit.setAlignment(Qt.AlignCenter)
+        self._lcredit.setFont(QFont("Arial",7)); self._lcredit.setFixedHeight(15)
+        self._lcredit.setStyleSheet("color:rgba(255,210,120,0.72);background:transparent;")
         self._grip=QSizeGrip(self); self._grip.setStyleSheet("background:transparent;")
         root.addWidget(hdr); root.addWidget(self._idle)
-        root.addWidget(self._scroll,1); root.addWidget(self._lconn)
+        root.addWidget(self._scroll,1); root.addWidget(self._lconn); root.addWidget(self._lcredit)
     def _position(self):
         sc=QApplication.desktop().availableGeometry()
         x=self.config.get("widget_x"); y=self.config.get("widget_y")
@@ -761,11 +783,12 @@ class FloatingWidget(QWidget):
     def _toggle_min(self):
         self._minimized=not self._minimized; self.config.set("minimized",self._minimized)
         if self._minimized:
-            self.setFixedHeight(50); self._idle.hide(); self._scroll.hide(); self._bx.setText("+")
+            self.setFixedHeight(50); self._idle.hide(); self._scroll.hide()
+            self._lcredit.hide(); self._bx.setText("+")
         else:
             self.setMinimumHeight(self.MIN_H); self.setMaximumHeight(16777215)
             self.resize(self.width(),max(self.MIN_H,self.config.get("widget_h",130)))
-            self._bx.setText("−"); self._refresh_content()
+            self._lcredit.show(); self._bx.setText("−"); self._refresh_content()
     def _refresh_content(self):
         if self._minimized: return
         if not self._alerts: self._idle.show(); self._scroll.hide()
@@ -975,7 +998,9 @@ class FullScreen(QWidget):
         else:
             el=QLabel("ESC / לחיצה כפולה לסגירה")
             el.setFont(QFont("Arial",9)); el.setStyleSheet("color:rgba(255,255,255,.25);")
-        bl2.addStretch(); bl2.addWidget(el); bl2.addStretch(); bl2.addWidget(self._clk)
+        cred_lbl=QLabel("נבנה על ידי הראלי דודאי  |  מרץ 2026")
+        cred_lbl.setFont(QFont("Arial",8)); cred_lbl.setStyleSheet("color:rgba(255,200,100,.28);")
+        bl2.addWidget(cred_lbl); bl2.addStretch(); bl2.addWidget(el); bl2.addStretch(); bl2.addWidget(self._clk)
         root.addWidget(bot)
 
     def _on_shelter_click(self):
@@ -1600,9 +1625,28 @@ class SettingsDialog(QDialog):
         v.addLayout(row("🖥  סגור מסך מלא אוטומטית אחרי:", self._cfs))
         v.addLayout(row("📋  חלון מרחף — הצג במשך:", self._cov))
         v.addWidget(sep())
-        sb=QPushButton("🔊  בחר צליל התרעה")
+        sb=QPushButton("🔊  בחר צליל התרעה ראשי")
         sb.setStyleSheet("QPushButton{background:#2a0000;color:#FFBBBB;border:1px solid #550000;border-radius:6px;padding:9px 20px;}QPushButton:hover{background:#440000;}")
         sb.clicked.connect(self.request_sound_dialog); v.addWidget(sb)
+        # ── צליל עבור חברים בהתרעה ──────────────────────────────
+        _FRIEND_SOUNDS = [
+            ("friend",   "🔔  ייחודי לחברים (ברירת מחדל)"),
+            ("same",     "🔊  כמו התרעה רגילה"),
+            ("soft",     "🎵  עדין — טון נמוך"),
+            ("silent",   "🔇  שקט — ללא צליל"),
+            ("standard", "📯  סטנדרטי"),
+            ("urgent",   "🚨  דחוף"),
+        ]
+        fs_row = QHBoxLayout(); fs_row.setSpacing(10)
+        fs_lbl = QLabel("🟠  צליל חברים בהתרעה:")
+        fs_lbl.setFont(QFont("Arial",11)); fs_lbl.setLayoutDirection(Qt.RightToLeft)
+        self._cfs2 = QComboBox(); self._cfs2.setLayoutDirection(Qt.RightToLeft)
+        cur_fst = self.config.get("friend_sound_type","friend")
+        for key,lbl in _FRIEND_SOUNDS:
+            self._cfs2.addItem(lbl, key)
+            if key == cur_fst: self._cfs2.setCurrentIndex(self._cfs2.count()-1)
+        fs_row.addWidget(self._cfs2); fs_row.addStretch(); fs_row.addWidget(fs_lbl)
+        v.addLayout(fs_row)
         lb=QPushButton("📍  בחר ישובים להתרעה")
         lb.clicked.connect(lambda: LocationsDialog(self.config,self).exec_()); v.addWidget(lb)
         v.addWidget(sep())
@@ -1633,6 +1677,7 @@ class SettingsDialog(QDialog):
         self.config.set("show_map",           self._cm.isChecked())
         self.config.set("fullscreen_timeout", self._cfs.currentData())
         self.config.set("overlay_timeout",    self._cov.currentData())
+        self.config.set("friend_sound_type",  self._cfs2.currentData())
         ns=self._ck.isChecked()
         if ns!=self.config.get("autostart",False): self.config.set_autostart(ns,sys.executable)
         self.accept()
@@ -1831,6 +1876,157 @@ class ShelterMiniBanner(QWidget):
 # ════════════════════════════════════════════════════════════════
 #  ALL-CLEAR SCREEN  – "מותר לצאת"
 # ════════════════════════════════════════════════════════════════
+#  FRIEND ALERT BANNER  – באנר כתום צף כשחבר/ה באזור ההתרעה
+# ════════════════════════════════════════════════════════════════
+class FriendAlertBanner(QWidget):
+    """רצועה כתומה-זהובה צפה המוצגת כשאדם ששיתף מיקומו נמצא באזור ההתרעה."""
+
+    def __init__(self, names: list, cities: list, parent=None):
+        super().__init__(parent)
+        self._names  = names
+        self._cities = cities
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        sc = QApplication.desktop().screenGeometry()
+        W = min(520, sc.width() - 40)
+        self.setFixedWidth(W)
+        self.move((sc.width() - W) // 2, sc.top() + 60)
+
+        root = QVBoxLayout(self); root.setContentsMargins(14, 10, 14, 10); root.setSpacing(6)
+
+        # ── כותרת ──────────────────────────────────────────────
+        hdr = QHBoxLayout(); hdr.setSpacing(8)
+        ico = QLabel("🟠"); ico.setFont(QFont("Segoe UI Emoji", 16)); ico.setFixedWidth(26)
+        title = QLabel("אדם קרוב אליך בהתרעה!")
+        title.setFont(QFont("Arial", 12, QFont.Bold))
+        title.setStyleSheet("color:#FFD050;"); title.setLayoutDirection(Qt.RightToLeft)
+        xbtn = QPushButton("✕"); xbtn.setFixedSize(22, 22)
+        xbtn.setStyleSheet("QPushButton{background:rgba(255,180,0,.20);color:white;border:none;"
+                           "border-radius:11px;}QPushButton:hover{background:rgba(255,100,0,.55);}")
+        xbtn.clicked.connect(self.close)
+        hdr.addWidget(ico); hdr.addWidget(title, 1); hdr.addWidget(xbtn)
+        root.addLayout(hdr)
+
+        # ── שמות + ישובים ───────────────────────────────────────
+        for name, city in zip(names, cities):
+            row = QHBoxLayout(); row.setSpacing(8)
+            nl = QLabel(f"👤  {name}")
+            nl.setFont(QFont("Arial", 10, QFont.Bold))
+            nl.setStyleSheet("color:white;"); nl.setLayoutDirection(Qt.RightToLeft)
+            cl = QLabel(f"📍  {city}")
+            cl.setFont(QFont("Arial", 10))
+            cl.setStyleSheet("color:#FFCC80;"); cl.setLayoutDirection(Qt.RightToLeft)
+            row.addWidget(nl); row.addStretch(); row.addWidget(cl)
+            root.addLayout(row)
+
+        # ── כיתוב תחתון ─────────────────────────────────────────
+        note = QLabel("נבנה על ידי הראלי דודאי  |  מרץ 2026")
+        note.setFont(QFont("Arial", 7)); note.setAlignment(Qt.AlignCenter)
+        note.setStyleSheet("color:rgba(255,210,100,.35);")
+        root.addWidget(note)
+
+        self.adjustSize()
+        QTimer.singleShot(12_000, self.close)
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 10, 10)
+        p.fillPath(path, QColor(110, 55, 0, 235))
+        p.setPen(QPen(QColor(255, 165, 0, 160), 1.5))
+        p.drawPath(path)
+        p.end()
+
+
+# ════════════════════════════════════════════════════════════════
+#  FRIEND LOCATIONS DIALOG – הצע להוסיף ישובים של חברים
+# ════════════════════════════════════════════════════════════════
+class FriendLocationsDialog(QDialog):
+    """מוצג פעם אחת בסשן כשנטענים מיקומי חברים עם ישובים ידועים.
+    מאפשר להוסיף את ישוביהם לרשימת הישובים המנוטרים."""
+
+    def __init__(self, friends: list, config, parent=None):
+        super().__init__(parent)
+        self._config  = config
+        self._checks  = {}   # city → QCheckBox
+        self.setWindowTitle("ישובים של אנשים ששיתפו מיקום")
+        self.setLayoutDirection(Qt.RightToLeft); self.resize(460, 340)
+        self.setStyleSheet("QDialog{background:#0e1a00;color:white;}"
+                           "QLabel{color:white;}"
+                           "QCheckBox{color:white;font-size:11px;spacing:8px;}"
+                           "QCheckBox::indicator{width:16px;height:16px;border-radius:3px;"
+                           "border:1px solid #558800;background:#1a2e00;}"
+                           "QCheckBox::indicator:checked{background:#88CC00;border-color:#AAEE00;}"
+                           "QPushButton{border-radius:6px;padding:8px 18px;font-size:12px;}")
+        v = QVBoxLayout(self); v.setContentsMargins(28, 20, 28, 20); v.setSpacing(12)
+
+        title = QLabel("📍  מיקום שותף זוהה")
+        title.setFont(QFont("Arial", 13, QFont.Bold)); title.setAlignment(Qt.AlignCenter)
+        v.addWidget(title)
+
+        sep = QFrame(); sep.setFixedHeight(1); sep.setStyleSheet("background:rgba(120,200,0,.30);")
+        v.addWidget(sep)
+
+        note = QLabel("הוסף את ישוביהם לרשימת ההתרעות שלך?")
+        note.setFont(QFont("Arial", 10)); note.setAlignment(Qt.AlignCenter)
+        note.setStyleSheet("color:rgba(255,255,255,.60);"); v.addWidget(note)
+
+        # ── שורה לכל חבר ─────────────────────────────────────
+        existing = set(config.get("locations", []))
+        sc_area = QScrollArea(); sc_area.setWidgetResizable(True); sc_area.setFixedHeight(160)
+        sc_area.setStyleSheet("QScrollArea{border:none;background:transparent;}")
+        inner = QWidget(); inner.setStyleSheet("background:transparent;")
+        il = QVBoxLayout(inner); il.setContentsMargins(0, 0, 0, 0); il.setSpacing(6)
+        for f in friends:
+            city = f.get("city")
+            if not city: continue
+            row = QHBoxLayout(); row.setSpacing(10)
+            avatar = QLabel("👤"); avatar.setFont(QFont("Segoe UI Emoji", 13)); avatar.setFixedWidth(24)
+            name_lbl = QLabel(f["name"])
+            name_lbl.setFont(QFont("Arial", 10, QFont.Bold))
+            name_lbl.setStyleSheet("color:#BBFF88;"); name_lbl.setLayoutDirection(Qt.RightToLeft)
+            city_lbl = QLabel(f"← {city}")
+            city_lbl.setFont(QFont("Arial", 9))
+            city_lbl.setStyleSheet("color:rgba(200,255,150,.75);"); city_lbl.setLayoutDirection(Qt.RightToLeft)
+            cb = QCheckBox(); cb.setChecked(city not in existing)
+            self._checks[city] = cb
+            row.addWidget(avatar); row.addWidget(name_lbl); row.addWidget(city_lbl, 1); row.addWidget(cb)
+            il.addLayout(row)
+        sc_area.setWidget(inner); v.addWidget(sc_area)
+
+        sep2 = QFrame(); sep2.setFixedHeight(1); sep2.setStyleSheet("background:rgba(120,200,0,.20);")
+        v.addWidget(sep2)
+
+        bts = QHBoxLayout(); bts.setSpacing(10)
+        ok_btn = QPushButton("✓  הוסף ישובים מסומנים")
+        ok_btn.setStyleSheet("QPushButton{background:#3a6600;color:white;border:1px solid #66AA00;}"
+                             "QPushButton:hover{background:#559900;}")
+        ok_btn.clicked.connect(self._save)
+        skip_btn = QPushButton("דלג")
+        skip_btn.setStyleSheet("QPushButton{background:transparent;color:rgba(255,255,255,.35);"
+                               "border:none;}QPushButton:hover{color:white;}")
+        skip_btn.clicked.connect(self.reject)
+        bts.addWidget(ok_btn, 2); bts.addWidget(skip_btn)
+        v.addLayout(bts)
+
+        # ── קרדיט ─────────────────────────────────────────────
+        credit = QLabel("נבנה על ידי הראלי דודאי  |  מרץ 2026")
+        credit.setFont(QFont("Arial", 7)); credit.setAlignment(Qt.AlignCenter)
+        credit.setStyleSheet("color:rgba(180,255,100,.28);")
+        v.addWidget(credit)
+
+    def _save(self):
+        current = self._config.get("locations", [])
+        for city, cb in self._checks.items():
+            if cb.isChecked() and city not in current:
+                current.append(city)
+        self._config.set("locations", current)
+        self.accept()
+
+
+# ════════════════════════════════════════════════════════════════
 class AllClearScreen(QWidget):
     """Brief green overlay confirming it is safe to leave the shelter."""
 
@@ -1869,6 +2065,11 @@ class AllClearScreen(QWidget):
         hint.setStyleSheet("color:rgba(180,255,210,0.6);")
         hint.setLayoutDirection(Qt.RightToLeft)
         layout.addWidget(hint)
+
+        credit = QLabel("נבנה על ידי הראלי דודאי  |  מרץ 2026")
+        credit.setFont(QFont("Arial", 9)); credit.setAlignment(Qt.AlignCenter)
+        credit.setStyleSheet("color:rgba(150,255,190,.30);")
+        layout.addWidget(credit)
 
         QTimer.singleShot(10_000, self.close)
         # Show AFTER layout is fully built
@@ -2116,6 +2317,8 @@ class RedAlertApp(QApplication):
         self._shelter_scr   =None       # ShelterWaitScreen (legacy)
         self._allclear_scr  =None
         self._shelter_banner=None       # ShelterMiniBanner instance
+        self._friend_banner =None       # FriendAlertBanner instance
+        self._shown_friend_loc_dlg=False  # הצג דיאלוג ישובי חברים רק פעם אחת בסשן
         self.widget=FloatingWidget(self.config)
         self.widget.sig_fullscreen.connect(self._fullscreen)
         self.widget.sig_settings.connect(self._settings)
@@ -2208,7 +2411,8 @@ class RedAlertApp(QApplication):
             my_hit  = bool(my_locs and alerted.intersection(my_locs))
             friend_hit = any(f.get("city") in alerted for f in self._friends)
             if self.config.get("sound", True):
-                self.sound.play(friend_in_area=friend_hit)
+                fst = self.config.get("friend_sound_type","friend")
+                self.sound.play(friend_in_area=friend_hit, friend_sound_type=fst)
             _log_step("sound triggered")
             # ── חלון מרחף ────────────────────────────────────────────
             ov_secs = self.config.get("overlay_timeout", 30)
@@ -2238,6 +2442,13 @@ class RedAlertApp(QApplication):
             self._tray.showMessage(f"{a.icon}  {a.title}",
                                    "  |  ".join(a.cities[:5]) + extra,
                                    QSystemTrayIcon.Critical, 6000)
+            # ── באנר כתום לחברים בהתרעה ────────────────────────
+            if friend_hit and self.config.get("friend_alert_banner", True):
+                f_names=[f["name"] for f in self._friends if f.get("city") in alerted]
+                f_cities=[f["city"] for f in self._friends if f.get("city") in alerted]
+                self._close_friend_banner()
+                self._friend_banner=FriendAlertBanner(f_names, f_cities)
+                self._friend_banner.show()
             _log_step("tray shown")
             # ── Record shelter end time ───────────────────────────────
             shelter_mins = a.info.get("shelter") if (hasattr(a,"info") and a.info) else None
@@ -2335,6 +2546,12 @@ class RedAlertApp(QApplication):
             except RuntimeError: pass
             self._shelter_banner = None
 
+    def _close_friend_banner(self):
+        if self._friend_banner is not None:
+            try: self._friend_banner.close()
+            except RuntimeError: pass
+            self._friend_banner = None
+
     # ── Map / Settings ─────────────────────────────────────────
     def _show_map(self): self.map_win.show(); self.map_win.raise_()
 
@@ -2406,6 +2623,25 @@ class RedAlertApp(QApplication):
     def _on_locs(self,people):
         self._friends=people; self.map_win.update_friends(people)
         self.worker.update_friend_cities([p["city"] for p in people if p.get("city")])
+        # ── פעם אחת בסשן: הצע להוסיף ישובי חברים לרשימת ההתרעות ──
+        if not self._shown_friend_loc_dlg and people:
+            friends_with_city=[p for p in people if p.get("city")]
+            if friends_with_city:
+                self._shown_friend_loc_dlg=True
+                QTimer.singleShot(1200, lambda: self._show_friend_locs_dlg(friends_with_city))
+
+    def _show_friend_locs_dlg(self, friends_with_city):
+        """מציג דיאלוג להוספת ישובי חברים — נקרא מ-QTimer."""
+        try:
+            dlg=FriendLocationsDialog(friends_with_city, self.config, self.widget)
+            dlg.exec_()
+            # אם הוסיפו ישובים חדשים → עדכן מפה ו-worker
+            if self.config.get("locations",[]):
+                self._init_map()
+                self.worker.update_friend_cities(
+                    [p["city"] for p in self._friends if p.get("city")])
+        except Exception:
+            pass
 
     def _on_loc_fail(self):
         self._google_logout()
@@ -2420,7 +2656,7 @@ class RedAlertApp(QApplication):
 
     def _exit(self):
         self.worker.stop(); self._stop_loc_worker()
-        self._close_overlay(); self._close_shelter_banner(); self.quit()
+        self._close_overlay(); self._close_shelter_banner(); self._close_friend_banner(); self.quit()
 
 
 if __name__ == "__main__":
