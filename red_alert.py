@@ -876,29 +876,35 @@ class FullScreen(QWidget):
         sc=QApplication.desktop().screenGeometry(); self.setGeometry(sc)
         self.setStyleSheet("background:#080000;"); self.setLayoutDirection(Qt.RightToLeft)
         SW=sc.width(); SH=sc.height()
-        ban_h=max(110,int(SH*.14)); city_h=max(160,int(SH*.22))
-        hist_h=max(90,int(SH*.12)); font_big=max(20,int(SW*.018))
-        font_sub=max(12,int(SW*.010)); font_ico=max(36,int(SH*.055))
-        cols=max(3,SW//220); mx=max(30,int(SW*.035))
+        ban_h=max(120,int(SH*.16)); city_h=max(150,int(SH*.20))
+        hist_h=max(90,int(SH*.12)); font_big=max(18,int(SW*.016))
+        font_sub=max(11,int(SW*.009)); font_ico=max(32,int(SH*.048))
+        cols=max(3,SW//220); mx=max(28,int(SW*.030))
         root=QVBoxLayout(self); root.setContentsMargins(0,0,0,0); root.setSpacing(0)
         a=self.active
         if a:
             # ── Banner ────────────────────────────────────────────────
-            ban=QWidget(); ban.setFixedHeight(ban_h)
+            ban=QWidget()
+            # setMinimumHeight (לא Fixed) — כך הבאנר מתרחב לפי כמות התוכן
+            ban.setMinimumHeight(ban_h)
             ban.setStyleSheet(f"background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
                               f"stop:0 {a.color},stop:1 rgba(80,0,0,.97));")
-            bl=QHBoxLayout(ban); bl.setContentsMargins(mx,8,mx,8); bl.setSpacing(18)
+            bl=QHBoxLayout(ban); bl.setContentsMargins(mx,10,mx,10); bl.setSpacing(16)
             self._ico=QLabel(a.icon); self._ico.setFont(QFont("Segoe UI Emoji",font_ico))
-            self._ico.setAlignment(Qt.AlignCenter); self._ico.setFixedWidth(int(font_ico*2.2))
-            tc=QVBoxLayout(); tc.setSpacing(4)
+            self._ico.setAlignment(Qt.AlignCenter); self._ico.setFixedWidth(int(font_ico*2.0))
+            tc=QVBoxLayout(); tc.setSpacing(5)
             t0=QLabel("🔴  התרעת צבע אדום!"); t0.setFont(QFont("Arial",font_big,QFont.Bold))
-            t0.setStyleSheet("color:white;")
-            t1=QLabel(a.title); t1.setFont(QFont("Arial",font_sub+2)); t1.setStyleSheet("color:white;")
-            # ── שעת ההתרעה ────────────────────────────────────────────
+            t0.setStyleSheet("color:white;"); t0.setLayoutDirection(Qt.RightToLeft)
+            t1=QLabel(a.title); t1.setFont(QFont("Arial",font_sub+2))
+            t1.setStyleSheet("color:white;"); t1.setLayoutDirection(Qt.RightToLeft)
+            # ── שעת ההתרעה — שורה נפרדת וברורה ────────────────────────
             t_time=QLabel(f"🕐  שעת התרעה:  {a.time_str}")
-            t_time.setFont(QFont("Arial",font_sub+1,QFont.Bold))
-            t_time.setStyleSheet("color:#FFE878;letter-spacing:1px;")
-            tc.addWidget(t0); tc.addWidget(t1); tc.addWidget(t_time); tc.addStretch()
+            t_time.setFont(QFont("Arial",font_sub+2,QFont.Bold))
+            t_time.setStyleSheet("color:#FFE878;background:rgba(0,0,0,0.25);"
+                                 "border-radius:5px;padding:2px 8px;")
+            t_time.setLayoutDirection(Qt.RightToLeft)
+            tc.addWidget(t0); tc.addWidget(t1); tc.addSpacing(4)
+            tc.addWidget(t_time); tc.addStretch()
             cb=QPushButton("✕"); cb.setFixedSize(40,40)
             cb.setStyleSheet("QPushButton{background:rgba(0,0,0,.3);color:white;border:none;"
                              "border-radius:20px;font-size:16px;}QPushButton:hover{background:rgba(0,0,0,.6);}")
@@ -906,8 +912,11 @@ class FullScreen(QWidget):
             bl.addWidget(self._ico); bl.addLayout(tc,1); bl.addWidget(cb,0,Qt.AlignTop)
             root.addWidget(ban)
             # ── רצועת מרחב מוגן ───────────────────────────────────────
-            sb=QWidget(); sb.setFixedHeight(max(40,int(SH*.05))); sb.setStyleSheet("background:#1b0000;")
-            sl=QHBoxLayout(sb)
+            sb=QWidget()
+            # setMinimumHeight — מאפשר לרצועה להתרחב אם הטקסט ארוך
+            sb.setMinimumHeight(max(48,int(SH*.055)))
+            sb.setStyleSheet("background:#1b0000;")
+            sl=QHBoxLayout(sb); sl.setContentsMargins(mx,8,mx,8)
             shelter_msg = "🏠  לא לצאת מהמרחב המוגן עד לשחרור ע\"י פיקוד העורף"
             if a.shelter_text:
                 mins = a.info.get("shelter","?")
@@ -915,6 +924,7 @@ class FullScreen(QWidget):
             ls2=QLabel(shelter_msg)
             ls2.setFont(QFont("Arial",max(11,font_sub+1),QFont.Bold))
             ls2.setStyleSheet("color:#FFE040;"); ls2.setAlignment(Qt.AlignCenter)
+            ls2.setWordWrap(True)           # ← מונע חיתוך טקסט
             ls2.setLayoutDirection(Qt.RightToLeft); sl.addWidget(ls2)
             root.addWidget(sb)
             # ── ישובים מוזהרים ─────────────────────────────────────────
