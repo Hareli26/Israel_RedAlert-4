@@ -160,8 +160,65 @@ CITY_COORDS = {
     "שפיר":(31.620,34.760),"יואב":(31.680,34.730),
     "קריית עקרון":(31.870,34.820),"מזכרת בתיה":(31.855,34.837),
     "ניר עם":(31.510,34.528),"גבעת ברנר":(31.840,34.820),
+    # מושבים ויישובים נוספים
+    "ברקת":(32.080,34.940),"כפר מל":(32.270,34.858),"תל מונד":(32.261,34.924),
+    "נורדיה":(32.305,34.876),"בית חנינא":(31.832,35.229),"מעלה מכמש":(31.857,35.280),
+    "גבעת זאב":(31.870,35.165),"ביתר עילית":(31.696,35.123),
+    "אלעזר":(31.648,35.121),"כפר עציון":(31.658,35.114),
+    "עלי":(32.054,35.282),"שילה":(32.052,35.299),"עפרה":(31.975,35.233),
+    "בית אל":(31.940,35.220),"קרני שומרון":(32.167,35.067),
+    "אלקנה":(32.108,35.029),"מעלה שומרון":(32.117,35.074),
+    "מכמורת":(32.360,34.858),"גן השרון":(32.206,34.903),
+    "אבן יהודה":(32.279,34.888),"צור יצחק":(32.237,34.912),
+    "כפר ויתקין":(32.380,34.893),"חרוצים":(32.355,34.902),
+    "שפיים":(32.230,34.836),"הרצליה פיתוח":(32.170,34.817),
+    "רמת השרון":(32.147,34.839),"גבעת שמואל":(32.080,34.850),
+    "קדימה-צורן":(32.274,34.916),"טירה":(32.232,34.951),
+    "ג'לג'וליה":(32.153,34.957),"כפר קאסם":(32.114,34.977),
+    "ראשון לציון - מזרח":(31.985,34.832),"נס ציונה - מזרח":(31.921,34.819),
+    "חולון - מזרח":(32.008,34.784),"בת ים - מזרח":(32.015,34.762),
+    "מבשרת ציון":(31.801,35.154),"מעלה אדומים - מזרח":(31.775,35.317),
+    "אבו גוש":(31.808,35.111),"ביר נבאלה":(31.847,35.224),
+    "בית שמש - ב":(31.745,34.989),"צור הדסה":(31.726,35.064),
+    "בית זית":(31.806,35.132),"ירושלים - קטמון":(31.754,35.200),
+    "ירושלים - גילה":(31.736,35.175),"ירושלים - הר חומה":(31.726,35.218),
+    "תלפיות מזרח":(31.748,35.237),"ירושלים - ארנונה":(31.751,35.221),
+    "כפר סבא - מזרח":(32.178,34.929),"אלפי מנשה":(32.157,35.046),
+    "פדואל":(32.140,35.003),"עמנואל":(32.147,35.138),
+    "חלמיש":(31.956,35.124),"בית חורון":(31.889,35.072),
+    "כפר נפאח":(32.993,35.655),"אל רום":(33.096,35.755),
+    "נווה אטיב":(33.152,35.634),"מג'דל שמס":(33.272,35.771),
+    "מסעדה":(33.240,35.768),"בוקעתא":(33.238,35.755),
+    "קצרין - מזרח":(33.010,35.710),"אלי עד":(32.982,35.649),
+    "נוב":(32.965,35.618),"אניעם":(32.975,35.694),
+    "שדה אליהו":(32.550,35.527),"מולדת":(32.615,35.412),
+    "כפר יחזקאל":(32.578,35.397),"גבע":(32.553,35.335),
+    "יזרעאל":(32.567,35.300),"דבוריה":(32.685,35.372),
+    "נצרת עילית":(32.708,35.325),"יובלים":(32.756,35.186),
+    "שפרעם - מזרח":(32.800,35.180),"כאבול":(32.855,35.215),
+    "חורפיש":(33.003,35.310),"מע'אר":(32.875,35.260),
+    "שגב-שלום":(31.440,34.683),"לקיה":(31.367,34.736),
 }
 ALL_CITIES = sorted(CITY_COORDS.keys())
+
+# ── OREF full city list ────────────────────────────────────────
+OREF_CITIES_URL = "https://www.oref.org.il/Shared/Ajax/GetDistricts.aspx?lang=he"
+
+def _fetch_oref_cities():
+    """Fetches the full locality list from the OREF API and updates ALL_CITIES."""
+    global ALL_CITIES
+    try:
+        r = requests.get(OREF_CITIES_URL, headers=API_HEADERS, timeout=8)
+        data = r.json()
+        api_cities = set()
+        for item in data:
+            city = (item.get("label") or item.get("value") or "").strip()
+            if city:
+                api_cities.add(city)
+        if api_cities:
+            ALL_CITIES = sorted(set(CITY_COORDS.keys()) | api_cities)
+    except Exception:
+        pass  # keep the static list on failure
 
 # ════════════════════════════════════════════════════════════════
 #  CATEGORIES
@@ -242,24 +299,90 @@ class Config:
         except Exception: pass
     def get(self,k,d=None): return self.data.get(k,self.DEF.get(k,d))
     def set(self,k,v): self.data[k]=v; self.save()
-    def set_autostart(self,enable,exe_path=""):
+    def set_autostart(self, enable, exe_path=""):
+        """מגדיר הפעלה עם Windows — מנסה Scheduled Task (עם הרשאות מנהל),
+        ומשתמש ב-Registry כגיבוי."""
         try:
-            if enable and exe_path:
-                xp=os.path.join(os.path.dirname(CFG_PATH),"task.xml")
-                xml=(f'<?xml version="1.0"?><Task xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">'
-                     f'<Triggers><LogonTrigger><Enabled>true</Enabled></LogonTrigger></Triggers>'
-                     f'<Principals><Principal id="Author"><LogonType>InteractiveToken</LogonType>'
-                     f'<RunLevel>HighestAvailable</RunLevel></Principal></Principals>'
-                     f'<Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>'
-                     f'<ExecutionTimeLimit>PT0S</ExecutionTimeLimit></Settings>'
-                     f'<Actions><Exec><Command>{exe_path}</Command></Exec></Actions></Task>')
-                with open(xp,"w",encoding="utf-8") as f: f.write(xml)
-                subprocess.run(f'schtasks /create /f /tn "RedAlertMonitor" /xml "{xp}"',
-                               shell=True,capture_output=True)
+            if getattr(sys, "frozen", False):
+                cmd  = sys.executable
+                args = ""
+                wd   = os.path.dirname(sys.executable)
             else:
-                subprocess.run('schtasks /delete /f /tn "RedAlertMonitor"',shell=True,capture_output=True)
-            self.set("autostart",enable)
-        except Exception: pass
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                vbs = os.path.join(script_dir, "launch.vbs")
+                if os.path.exists(vbs):
+                    cmd  = "wscript.exe"
+                    args = f'"{vbs}"'
+                else:
+                    cmd  = sys.executable
+                    args = f'"{os.path.abspath(__file__)}"'
+                wd = script_dir
+
+            if enable:
+                # --- שיטה 1: Scheduled Task (מריץ עם הרשאות מנהל) ---
+                task_ok = False
+                try:
+                    xp = os.path.join(os.path.dirname(CFG_PATH), "task.xml")
+                    args_xml = f"<Arguments>{args}</Arguments>" if args else ""
+                    xml = (
+                        '<?xml version="1.0" encoding="UTF-16"?>'
+                        '<Task xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">'
+                        '<Triggers><LogonTrigger><Enabled>true</Enabled>'
+                        '<Delay>PT5S</Delay></LogonTrigger></Triggers>'
+                        '<Principals><Principal id="Author">'
+                        '<LogonType>InteractiveToken</LogonType>'
+                        '<RunLevel>HighestAvailable</RunLevel>'
+                        '</Principal></Principals>'
+                        '<Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>'
+                        '<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>'
+                        '<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>'
+                        '<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>'
+                        '</Settings>'
+                        f'<Actions><Exec>'
+                        f'<Command>{cmd}</Command>'
+                        f'{args_xml}'
+                        f'<WorkingDirectory>{wd}</WorkingDirectory>'
+                        f'</Exec></Actions></Task>'
+                    )
+                    with open(xp, "w", encoding="utf-16") as f:
+                        f.write(xml)
+                    result = subprocess.run(
+                        f'schtasks /create /f /tn "RedAlertMonitor" /xml "{xp}"',
+                        shell=True, capture_output=True, text=True, timeout=15)
+                    task_ok = (result.returncode == 0)
+                except Exception:
+                    task_ok = False
+
+                # --- שיטה 2: Registry (גיבוי — ללא הרשאות מנהל) ---
+                try:
+                    reg_cmd = f'"{cmd}" {args}'.strip() if args else f'"{cmd}"'
+                    key = winreg.OpenKey(
+                        winreg.HKEY_CURRENT_USER,
+                        r"Software\Microsoft\Windows\CurrentVersion\Run",
+                        0, winreg.KEY_SET_VALUE)
+                    winreg.SetValueEx(key, "RedAlertMonitor", 0, winreg.REG_SZ, reg_cmd)
+                    winreg.CloseKey(key)
+                except Exception:
+                    pass
+            else:
+                # מחיקה משני המקומות
+                subprocess.run('schtasks /delete /f /tn "RedAlertMonitor"',
+                               shell=True, capture_output=True, timeout=10)
+                try:
+                    key = winreg.OpenKey(
+                        winreg.HKEY_CURRENT_USER,
+                        r"Software\Microsoft\Windows\CurrentVersion\Run",
+                        0, winreg.KEY_SET_VALUE)
+                    try:
+                        winreg.DeleteValue(key, "RedAlertMonitor")
+                    except FileNotFoundError:
+                        pass
+                    winreg.CloseKey(key)
+                except Exception:
+                    pass
+            self.set("autostart", enable)
+        except Exception:
+            pass
 
 # ════════════════════════════════════════════════════════════════
 #  ALERT
@@ -306,9 +429,11 @@ class AlertWorker(QThread):
     def __init__(self,config):
         super().__init__(); self.config=config; self._running=True
         self._last_id=None; self._had_err=False
-        self._friend_cities=set(); self._lock=threading.Lock()
+        self._friend_cities=set(); self._temp_cities=set(); self._lock=threading.Lock()
     def update_friend_cities(self,cities):
         with self._lock: self._friend_cities=set(c for c in cities if c)
+    def update_temp_cities(self,cities):
+        with self._lock: self._temp_cities=set(c for c in cities if c)
     def run(self):
         sess=requests.Session(); sess.headers.update(API_HEADERS)
         while self._running:
@@ -328,8 +453,8 @@ class AlertWorker(QThread):
                         elif aid!=self._last_id:
                             self._last_id=aid
                             locs=self.config.get("locations",[])
-                            with self._lock: friend_locs=self._friend_cities
-                            all_locs=list(set(locs)|friend_locs)
+                            with self._lock: friend_locs=self._friend_cities; temp_locs=self._temp_cities
+                            all_locs=list(set(locs)|friend_locs|temp_locs)
                             cities=data.get("data",[])
                             if not all_locs:
                                 self.new_alert.emit(data)
@@ -471,6 +596,37 @@ class LocationSharingWorker(QThread):
         return best if best_d<0.03 else None  # ~17 km
 
     def stop(self): self._running=False; self.quit(); self.wait(2000)
+
+# ════════════════════════════════════════════════════════════════
+#  LOCATION TRACK WORKER  — מעקב מיקום כל 5 דקות לפי IP
+# ════════════════════════════════════════════════════════════════
+class LocationTrackWorker(QThread):
+    """Periodically checks the user's location via IP.
+    Emits location_detected(city) whenever the detected city changes."""
+    location_detected = pyqtSignal(str)
+    INTERVAL = 300   # seconds between checks
+
+    def __init__(self):
+        super().__init__()
+        self._running = True
+        self._last_city = None
+
+    def run(self):
+        while self._running:
+            result = _detect_city_from_ip()
+            city = result[0] if result else None
+            if city and city != self._last_city:
+                self._last_city = city
+                self.location_detected.emit(city)
+            for _ in range(self.INTERVAL * 10):
+                if not self._running:
+                    break
+                time.sleep(0.1)
+
+    def stop(self):
+        self._running = False
+        self.quit()
+        self.wait(2000)
 
 # ════════════════════════════════════════════════════════════════
 #  MAP HTML  (3 marker types: alert/user/friend)
@@ -710,7 +866,7 @@ class MapWindow(QWidget):
 class FloatingWidget(QWidget):
     sig_fullscreen=pyqtSignal(); sig_settings=pyqtSignal(); sig_map=pyqtSignal()
     sig_google=pyqtSignal()   # ← פותח גוגל מפות שיתוף מיקום
-    MIN_W,MIN_H=235,130
+    MIN_W,MIN_H=262,130
     def __init__(self,config):
         super().__init__(); self.config=config
         self._alerts=deque(maxlen=60); self._active=None
@@ -742,6 +898,7 @@ class FloatingWidget(QWidget):
         self._lt=QLabel("🔴  התרעות")
         self._lt.setFont(QFont("Arial",9,QFont.Bold)); self._lt.setStyleSheet("color:white;")
         self._lt.setLayoutDirection(Qt.RightToLeft)
+        self._lt.setMinimumWidth(90)
         hl.addWidget(self._bc); hl.addWidget(self._bm); hl.addWidget(self._bg); hl.addWidget(self._bx)
         hl.addStretch(); hl.addWidget(self._lt)
         self._idle=QLabel("אין התרעות פעילות"); self._idle.setAlignment(Qt.AlignCenter)
@@ -952,7 +1109,7 @@ class FullScreen(QWidget):
         # ── היסטוריה ───────────────────────────────────────────────────
         if len(self.history)>1:
             hw=QWidget(); hw.setStyleSheet("background:#0c0000;")
-            hv=QVBoxLayout(hw); hv.setContentsMargins(50,10,50,10); hv.setSpacing(3)
+            hv=QVBoxLayout(hw); hv.setContentsMargins(28,10,28,10); hv.setSpacing(3)
             ht=QLabel("היסטוריית התרעות אחרונות:")
             ht.setFont(QFont("Arial",11,QFont.Bold)); ht.setStyleSheet("color:rgba(255,255,255,.5);"); hv.addWidget(ht)
             hsc=QScrollArea(); hsc.setWidgetResizable(True); hsc.setFixedHeight(hist_h)
@@ -965,7 +1122,8 @@ class FullScreen(QWidget):
                 rl2=QHBoxLayout(rw2); rl2.setContentsMargins(0,1,0,1); rl2.setSpacing(8)
                 op="0.30" if skip else "0.70"
                 tl=QLabel(alt.time_str); tl.setFont(QFont("Arial",10,QFont.Bold))
-                tl.setStyleSheet(f"color:rgba(255,220,100,{op});"); tl.setFixedWidth(68)
+                tl.setStyleSheet(f"color:rgba(255,220,100,{op});"); tl.setFixedWidth(90)
+                tl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
                 il=QLabel(alt.icon); il.setFont(QFont("Segoe UI Emoji",11)); il.setFixedWidth(22)
                 cl=QLabel(", ".join(alt.cities[:5])); cl.setFont(QFont("Arial",9))
                 cl.setStyleSheet(f"color:rgba(255,255,255,{op});"); cl.setLayoutDirection(Qt.RightToLeft)
@@ -1259,6 +1417,83 @@ class LocationDetectDialog(QDialog):
     def _open_more(self):
         self.accept()
         QTimer.singleShot(100, self._open_settings)
+
+
+# ════════════════════════════════════════════════════════════════
+#  TEMP LOCATION DIALOG  — "נמצאת ב[city], הוסף זמנית?"
+# ════════════════════════════════════════════════════════════════
+class TempLocationDialog(QDialog):
+    """Shown when the user's IP location is not in their configured cities.
+    Offers to add the detected city temporarily until they move away."""
+
+    def __init__(self, city, parent=None):
+        super().__init__(parent)
+        self._city = city
+        self._secs = 30
+        self.setWindowTitle("מיקום חדש זוהה")
+        self.setLayoutDirection(Qt.RightToLeft)
+        self.resize(420, 230)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.setStyleSheet(
+            "QDialog{background:#120000;color:white;}"
+            "QLabel{color:white;}"
+            "QPushButton{border-radius:6px;padding:8px 18px;font-size:12px;}")
+        v = QVBoxLayout(self); v.setContentsMargins(30, 22, 30, 22); v.setSpacing(12)
+
+        title = QLabel("📍  זוהה מיקום חדש")
+        title.setFont(QFont("Arial", 13, QFont.Bold)); title.setAlignment(Qt.AlignCenter)
+        v.addWidget(title)
+
+        sep = QFrame(); sep.setFixedHeight(1)
+        sep.setStyleSheet("background:rgba(255,50,50,.3);"); v.addWidget(sep)
+
+        city_lbl = QLabel(city)
+        city_lbl.setFont(QFont("Arial", 18, QFont.Bold))
+        city_lbl.setAlignment(Qt.AlignCenter)
+        city_lbl.setStyleSheet(
+            "color:#FF8080;padding:8px;background:rgba(255,20,20,.12);"
+            "border-radius:8px;border:1px solid rgba(255,50,50,.3);")
+        v.addWidget(city_lbl)
+
+        note = QLabel("הישוב אינו ברשימת ההתרעות שלך.\nהוסף אותו זמנית עד שתעבור מקום?")
+        note.setFont(QFont("Arial", 10)); note.setAlignment(Qt.AlignCenter)
+        note.setStyleSheet("color:rgba(255,255,255,.62);")
+        note.setWordWrap(True); note.setLayoutDirection(Qt.RightToLeft)
+        v.addWidget(note)
+
+        bts = QHBoxLayout(); bts.setSpacing(10)
+        self._yes = QPushButton(f"✓  הוסף זמנית ({self._secs})")
+        self._yes.setStyleSheet(
+            "QPushButton{background:#8B0000;color:white;border:1px solid #CC2020;}"
+            "QPushButton:hover{background:#CC0000;}")
+        self._yes.clicked.connect(self.accept)
+        no = QPushButton("לא תודה")
+        no.setStyleSheet(
+            "QPushButton{background:rgba(255,255,255,.08);color:white;"
+            "border:1px solid rgba(255,255,255,.20);}"
+            "QPushButton:hover{background:rgba(255,255,255,.18);}")
+        no.clicked.connect(self.reject)
+        bts.addWidget(self._yes, 2); bts.addWidget(no, 1)
+        v.addLayout(bts)
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start(1000)
+
+    def _tick(self):
+        self._secs -= 1
+        try:
+            self._yes.setText(f"✓  הוסף זמנית ({self._secs})")
+        except RuntimeError:
+            pass
+        if self._secs <= 0:
+            self._timer.stop()
+            self.reject()
+
+    def closeEvent(self, e):
+        try: self._timer.stop()
+        except RuntimeError: pass
+        super().closeEvent(e)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -2329,6 +2564,7 @@ class RedAlertApp(QApplication):
         self._shelter_banner=None       # ShelterMiniBanner instance
         self._friend_banner =None       # FriendAlertBanner instance
         self._shown_friend_loc_dlg=False  # הצג דיאלוג ישובי חברים רק פעם אחת בסשן
+        self._temp_locations=set()        # ישובים זמניים (לפי מיקום IP)
         self.widget=FloatingWidget(self.config)
         self.widget.sig_fullscreen.connect(self._fullscreen)
         self.widget.sig_settings.connect(self._settings)
@@ -2344,6 +2580,12 @@ class RedAlertApp(QApplication):
         self.worker.conn_error.connect(self.widget.set_conn_error)
         self.worker.conn_ok.connect(self.widget.set_conn_ok)
         self.worker.start()
+        # ── Fetch full OREF city list in background ─────────────────
+        threading.Thread(target=_fetch_oref_cities, daemon=True).start()
+        # ── Location tracker — detect IP location changes ───────────
+        self._loc_track=LocationTrackWorker()
+        self._loc_track.location_detected.connect(self._on_ip_location_detected)
+        self._loc_track.start()
         # ── Google — חיבור אוטומטי עם פרופיל קוקיות מתמיד ────────
         if _HAS_WEB:
             self._google_browser = GoogleBrowserWindow()
@@ -2357,19 +2599,48 @@ class RedAlertApp(QApplication):
                 self._start_loc_worker(saved)
         # Show user's own cities on the map from the start
         QTimer.singleShot(1500, self._init_map)
-        # זיהוי מיקום אוטומטי — רק אם אין ישובים מוגדרים עדיין
-        if not self.config.get("locations", []):
-            QTimer.singleShot(2200, self._auto_detect_location)
+        # זיהוי מיקום תמיד בהפעלה — גם אם יש ישובים מוגדרים
+        QTimer.singleShot(2200, self._check_startup_location)
 
     def _init_map(self):
         """Load user cities and friends onto the map immediately at startup."""
         uc = self.config.get("locations", [])
         self.map_win.update_alerts([], uc, self._friends)
 
-    def _auto_detect_location(self):
-        """מנסה לזהות מיקום לפי IP ומציג דיאלוג להגדרת ישוב."""
+    def _check_startup_location(self):
+        """נקרא תמיד בהפעלה — מזהה מיקום IP ומעדכן רשימה."""
         result = _detect_city_from_ip()
         city = result[0] if result else None
+        if not city:
+            return
+        permanent = self.config.get("locations", [])
+        if not permanent:
+            # הפעלה ראשונה / אין ישובים — הצג דיאלוג מלא
+            self._auto_detect_location_with_city(city)
+        elif city not in permanent and city not in self._temp_locations:
+            # יש ישובים קבועים אבל נמצאים עכשיו במקום אחר — הוסף זמנית
+            self._temp_locations.add(city)
+            # עדכן את LocationTrackWorker שיידע את המיקום הנוכחי (מניעת כפילות)
+            if self._loc_track and hasattr(self._loc_track, '_last_city'):
+                self._loc_track._last_city = city
+            self._update_temp_filter()
+            self._init_map()
+            self._tray.showMessage(
+                f"📍  מיקום זוהה: {city}",
+                f"נמצאת ב-{city} — הישוב נוסף זמנית לרשימת ההתרעות.\n"
+                f"הישובים הקבועים שלך ({', '.join(permanent[:3])}"
+                f"{'...' if len(permanent)>3 else ''}) פעילים תמיד.",
+                QSystemTrayIcon.Information, 9000)
+        # אם city כבר ב-permanent — אין צורך בפעולה, הכל תקין
+
+    def _auto_detect_location(self):
+        """מנסה לזהות מיקום לפי IP ומציג דיאלוג להגדרת ישוב (הפעלה ראשונה)."""
+        result = _detect_city_from_ip()
+        city = result[0] if result else None
+        self._auto_detect_location_with_city(city)
+
+    def _auto_detect_location_with_city(self, city):
+        """מציג דיאלוג זיהוי מיקום עם ישוב נתון."""
         dlg = LocationDetectDialog(
             detected_city=city,
             config=self.config,
@@ -2400,6 +2671,40 @@ class RedAlertApp(QApplication):
             lambda r:(self.widget.show() or self.widget.raise_())
             if r in(QSystemTrayIcon.DoubleClick,QSystemTrayIcon.Trigger) else None)
         self._tray.show()
+
+    # ── IP Location tracking ────────────────────────────────────
+    def _on_ip_location_detected(self, city):
+        """Called when the IP-detected city changes."""
+        permanent = set(self.config.get("locations", []))
+        # If no permanent locations: first-run dialog handles it
+        if not permanent:
+            return
+        # Remove all previous temp locations (we moved somewhere new)
+        if self._temp_locations:
+            removed = set(self._temp_locations)
+            self._temp_locations.clear()
+            self._update_temp_filter()
+            self._tray.showMessage(
+                "📍 ישוב זמני הוסר",
+                f"עברת מקום — הוסרו: {', '.join(removed)}",
+                QSystemTrayIcon.Information, 4000)
+        # Ask to add new city temporarily if not already permanent
+        if city not in permanent:
+            QTimer.singleShot(800, lambda c=city: self._show_temp_loc_dialog(c))
+
+    def _show_temp_loc_dialog(self, city):
+        dlg = TempLocationDialog(city, self.widget)
+        if dlg.exec_() == QDialog.Accepted:
+            self._temp_locations.add(city)
+            self._update_temp_filter()
+            self._tray.showMessage(
+                "📍 ישוב זמני נוסף",
+                f"{city} נוסף זמנית לרשימת ההתרעות.",
+                QSystemTrayIcon.Information, 5000)
+
+    def _update_temp_filter(self):
+        """Notify AlertWorker of current temporary locations."""
+        self.worker.update_temp_cities(self._temp_locations)
 
     # ── Alert ──────────────────────────────────────────────────
     def _on_alert(self, data):
@@ -2666,6 +2971,7 @@ class RedAlertApp(QApplication):
 
     def _exit(self):
         self.worker.stop(); self._stop_loc_worker()
+        if self._loc_track: self._loc_track.stop()
         self._close_overlay(); self._close_shelter_banner(); self._close_friend_banner(); self.quit()
 
 
