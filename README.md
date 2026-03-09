@@ -11,9 +11,10 @@
 
 | # | תיאור |
 |---|--------|
+| ✅ | **התקנה לנתיב קבוע `C:\RedAlertIDF`** — Task Scheduler תמיד מצביע לשם, לא לתיקיית ההורדות |
+| ✅ | **`install.bat` חדש** — התקנה מלאה בלחיצה אחת + Scheduled Task + Registry |
 | ✅ | **זיהוי מיקום מיידי בהפעלה** — האפליקציה מזהה היכן אתה נמצא עכשיו ומוסיפה את הישוב אוטומטית |
 | ✅ | **ישובים קבועים נשמרים תמיד** — המיקום הנוכחי מוסף כישוב *זמני*, הישובים הקבועים שלך תמיד פעילים |
-| ✅ | **הפעלה עם Windows מתוקנת** — Scheduled Task (עם הרשאות מנהל) + Registry כגיבוי |
 | ✅ | **תצוגה משופרת** — לא עוד חיתוך טקסט בווידג'ט הצף ובהיסטוריית ההתרעות |
 | ✅ | **~60 ישובים ומושבים נוספים** — כולל ברקת, גבעת זאב, קרני שומרון, שגב-שלום, ועוד |
 
@@ -142,37 +143,60 @@ ShelterMiniBanner ירוק — "ניתן לצאת — פיקוד העורף שח
 
 ## 🚀 הפעלה
 
-### אפשרות א׳ — קובץ BAT (מומלץ)
+### ⭐ אפשרות א׳ — התקנה מלאה (מומלץ)
+```
+לחץ ימני על:  install.bat  ← "הפעל כמנהל מערכת"
+```
+מתקין ל-`C:\RedAlertIDF`, יוצר Task Scheduler ו-Registry autostart.
+
+### אפשרות ב׳ — הפעלה מהירה (ללא התקנה)
 ```
 לחץ פעמיים על:  הפעל.bat
 ```
-מתקין תלויות אוטומטית ומפעיל את האפליקציה.
+מפעיל ישירות. הגדרות הפעלה-עם-Windows עובדות גם כך.
 
-### אפשרות ב׳ — Python ישיר
+### אפשרות ג׳ — Python ישיר
 ```bash
 pip install -r requirements.txt
 python red_alert.py
 ```
 
-### אפשרות ג׳ — EXE (לאחר Build)
+### אפשרות ד׳ — EXE (לאחר Build)
 ```
-לחץ פעמיים על:  RedAlertMonitor.exe
+הרץ:  build_exe.bat
+אחר-כך פתח:  C:\RedAlertIDF\RedAlertMonitor.exe
 ```
 
 ---
 
 ## 🔄 הפעלה אוטומטית עם Windows
 
+### שיטה מומלצת — `install.bat`
+```
+לחץ ימני על install.bat ← "הפעל כמנהל מערכת"
+```
+מגדיר הכל אוטומטית ובשאלה בסוף: "הפעל עכשיו? (Y/N)"
+
+### שיטה חלופית — מתוך ההגדרות
 1. פתח **⚙ הגדרות** מהווידג'ט הצף
 2. סמן ✅ **"🚀 הפעל עם Windows (כמנהל)"**
 3. לחץ **שמור**
 
-**כיצד זה עובד:**
-- ראשית נוצר **Scheduled Task** שמפעיל את האפליקציה עם הרשאות מנהל
-- כגיבוי נרשם גם ב-**Windows Registry** (Run at startup)
-- האפליקציה תופעל **5 שניות** אחרי כניסה לחשבון
+**מה קורה מאחורי הקלעים:**
+```
+set_autostart(enable=True)
+    ↓
+1. מעתיק EXE → C:\RedAlertIDF\RedAlertMonitor.exe  (נתיב קבוע)
+    ↓
+2. Task Scheduler ← C:\RedAlertIDF\RedAlertMonitor.exe
+   (RunLevel=HighestAvailable, Delay=5s אחרי כניסה)
+    ↓
+3. Registry HKCU\...\Run ← C:\RedAlertIDF\...  (גיבוי)
+```
 
-> **הערה:** בסגנון "שמור" השינוי נכנס לתוקף מההפעלה הבאה של Windows.
+> **למה `C:\RedAlertIDF`?**
+> נתיב קבוע שלא תלוי במיקום תיקיית ההורדות.
+> גם אחרי העברת הקבצים — Task Scheduler ימצא תמיד את ה-EXE.
 
 ---
 
@@ -199,11 +223,24 @@ build_exe.bat
 RedAlertMonitor_v4/
 ├── red_alert.py          ← קוד מקור ראשי (קובץ יחיד)
 ├── requirements.txt      ← תלויות Python
-├── הפעל.bat             ← הפעלה מהירה
-├── build_exe.bat         ← בניית EXE עם PyInstaller
-├── launch.vbs            ← הפעלה ללא חלון console
+├── install.bat           ← ✅ התקנה מלאה ל-C:\RedAlertIDF (מומלץ)
+├── build_exe.bat         ← בניית EXE עם PyInstaller + העתקה ל-C:\RedAlertIDF
+├── הפעל.bat             ← הפעלה מהירה (ללא התקנה)
+├── launch.vbs            ← הפעלה ללא חלון console (גם מ-C:\RedAlertIDF)
 └── README.md             ← קובץ זה
 ```
+
+### 📁 תיקיית ההתקנה הקבועה
+
+```
+C:\RedAlertIDF\
+├── RedAlertMonitor.exe   ← קובץ הרצה (נעתק אוטומטית)
+├── red_alert.py          ← קוד מקור (גיבוי)
+└── launch.vbs            ← מפעיל חכם
+```
+
+> Task Scheduler **תמיד** מצביע ל-`C:\RedAlertIDF\RedAlertMonitor.exe` —
+> נתיב קבוע שלא משתנה גם אם הזזת את תיקיית המקור.
 
 ---
 
@@ -265,10 +302,20 @@ QTWEBENGINE_DISABLE_SANDBOX = 1
 - הישוב שנוסף זמנית יימחק בפעם הבאה שתיסע למקום אחר
 
 ### האפליקציה לא עולה עם Windows
-- פתח **הגדרות** ← בטל ← שמור ← הפעל שוב ← סמן שוב
-- בדוק ב-**Task Scheduler** (`taskschd.msc`) שהמשימה `RedAlertMonitor` קיימת ומופעלת
-- בדוק ב-**Registry Editor** (`regedit`) תחת:
-  `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` שהערך `RedAlertMonitor` קיים
+**בדיקה מהירה:**
+1. פתח Task Scheduler (`taskschd.msc`)
+2. חפש "RedAlertMonitor" תחת Task Scheduler Library
+3. בדוק שה-Actions מצביע ל: `C:\RedAlertIDF\RedAlertMonitor.exe`
+
+**אם הנתיב שגוי או ישן:**
+- הרץ `install.bat` כמנהל — ידרוס ויתקן הכל
+- **או:** פתח **הגדרות** ← בטל סימון "הפעל עם Windows" ← שמור ← סמן שוב ← שמור
+
+**בדיקת קיום ה-EXE:**
+```
+dir C:\RedAlertIDF\RedAlertMonitor.exe
+```
+אם לא קיים — הרץ `build_exe.bat` ואחר-כך `install.bat`
 
 ### לא מגיע סאונד
 - בדוק שהסאונד לא מוגדר כ-`שקט` בהגדרות

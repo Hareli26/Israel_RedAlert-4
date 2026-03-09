@@ -59,8 +59,12 @@ try:
 except ImportError:
     pass
 
-APP_VERSION = "4.0.0"
-APP_NAME    = "התרעות צבע אדום"
+APP_VERSION  = "4.1.0"
+APP_NAME     = "התרעות צבע אדום"
+INSTALL_DIR  = r"C:\RedAlertIDF"          # תיקיית התקנה קבועה
+INSTALL_EXE  = os.path.join(INSTALL_DIR, "RedAlertMonitor.exe")
+INSTALL_VBS  = os.path.join(INSTALL_DIR, "launch.vbs")
+INSTALL_PY   = os.path.join(INSTALL_DIR, "red_alert.py")
 POLL_MS     = 2000
 OREF_URL    = "https://www.oref.org.il/WarningMessages/alert/alerts.json"
 API_HEADERS = {
@@ -300,27 +304,37 @@ class Config:
     def get(self,k,d=None): return self.data.get(k,self.DEF.get(k,d))
     def set(self,k,v): self.data[k]=v; self.save()
     def set_autostart(self, enable, exe_path=""):
-        """מגדיר הפעלה עם Windows — מנסה Scheduled Task (עם הרשאות מנהל),
-        ומשתמש ב-Registry כגיבוי."""
+        """מגדיר הפעלה עם Windows.
+        תמיד מתקין ל-C:\\RedAlertIDF (נתיב קבוע) ומצביע משם ב-Task Scheduler.
+        גיבוי ב-Registry."""
+        import shutil as _shutil
         try:
-            if getattr(sys, "frozen", False):
-                cmd  = sys.executable
-                args = ""
-                wd   = os.path.dirname(sys.executable)
-            else:
-                script_dir = os.path.dirname(os.path.abspath(__file__))
-                vbs = os.path.join(script_dir, "launch.vbs")
-                if os.path.exists(vbs):
-                    cmd  = "wscript.exe"
-                    args = f'"{vbs}"'
-                else:
-                    cmd  = sys.executable
-                    args = f'"{os.path.abspath(__file__)}"'
-                wd = script_dir
+            # ── שלב 0: הכן את תיקיית ההתקנה הקבועה ──────────────────────
+            os.makedirs(INSTALL_DIR, exist_ok=True)
 
             if enable:
-                # --- שיטה 1: Scheduled Task (מריץ עם הרשאות מנהל) ---
-                task_ok = False
+                # ── שלב 1: קבע מה להריץ מ-C:\RedAlertIDF ─────────────────
+                if getattr(sys, "frozen", False):
+                    # רץ כ-EXE — העתק ל-INSTALL_DIR אם שם אחר
+                    src = os.path.abspath(sys.executable)
+                    if src.lower() != INSTALL_EXE.lower():
+                        _shutil.copy2(src, INSTALL_EXE)
+                    cmd, args, wd = INSTALL_EXE, "", INSTALL_DIR
+
+                else:
+                    # רץ כ-.py — העתק VBS ו-py ל-INSTALL_DIR
+                    script_dir = os.path.dirname(os.path.abspath(__file__))
+                    src_vbs = os.path.join(script_dir, "launch.vbs")
+                    src_py  = os.path.abspath(__file__)
+                    _shutil.copy2(src_py, INSTALL_PY)
+                    if os.path.exists(src_vbs):
+                        _shutil.copy2(src_vbs, INSTALL_VBS)
+                        cmd, args = "wscript.exe", f'"{INSTALL_VBS}"'
+                    else:
+                        cmd, args = sys.executable, f'"{INSTALL_PY}"'
+                    wd = INSTALL_DIR
+
+                # ── שלב 2: Scheduled Task (עם הרשאות מנהל) ───────────────
                 try:
                     xp = os.path.join(os.path.dirname(CFG_PATH), "task.xml")
                     args_xml = f"<Arguments>{args}</Arguments>" if args else ""
@@ -346,33 +360,31 @@ class Config:
                     )
                     with open(xp, "w", encoding="utf-16") as f:
                         f.write(xml)
-                    result = subprocess.run(
+                    subprocess.run(
                         f'schtasks /create /f /tn "RedAlertMonitor" /xml "{xp}"',
                         shell=True, capture_output=True, text=True, timeout=15)
-                    task_ok = (result.returncode == 0)
                 except Exception:
-                    task_ok = False
+                    pass
 
-                # --- שיטה 2: Registry (גיבוי — ללא הרשאות מנהל) ---
+                # ── שלב 3: Registry (גיבוי) ───────────────────────────────
                 try:
-                    reg_cmd = f'"{cmd}" {args}'.strip() if args else f'"{cmd}"'
-                    key = winreg.OpenKey(
-                        winreg.HKEY_CURRENT_USER,
-                        r"Software\Microsoft\Windows\CurrentVersion\Run",
-                        0, winreg.KEY_SET_VALUE)
-                    winreg.SetValueEx(key, "RedAlertMonitor", 0, winreg.REG_SZ, reg_cmd)
+                    reg_val = f'"{cmd}" {args}'.strip() if args else f'"{cmd}"'
+                    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                        r"Software\Microsoft\Windows\CurrentVersion\Run",
+                                        0, winreg.KEY_SET_VALUE)
+                    winreg.SetValueEx(key, "RedAlertMonitor", 0, winreg.REG_SZ, reg_val)
                     winreg.CloseKey(key)
                 except Exception:
                     pass
+
             else:
-                # מחיקה משני המקומות
+                # ── ביטול: מחיקה מ-Task Scheduler ומ-Registry ────────────
                 subprocess.run('schtasks /delete /f /tn "RedAlertMonitor"',
                                shell=True, capture_output=True, timeout=10)
                 try:
-                    key = winreg.OpenKey(
-                        winreg.HKEY_CURRENT_USER,
-                        r"Software\Microsoft\Windows\CurrentVersion\Run",
-                        0, winreg.KEY_SET_VALUE)
+                    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                        r"Software\Microsoft\Windows\CurrentVersion\Run",
+                                        0, winreg.KEY_SET_VALUE)
                     try:
                         winreg.DeleteValue(key, "RedAlertMonitor")
                     except FileNotFoundError:
@@ -380,6 +392,7 @@ class Config:
                     winreg.CloseKey(key)
                 except Exception:
                     pass
+
             self.set("autostart", enable)
         except Exception:
             pass
